@@ -90,6 +90,18 @@ io.on("connection", (socket) => {
       `Le joueur ${socket.id} a rejoint la partie avec le PIN : ${gamePin}`
     );
   });
+
+  socket.on("show-answers", (gamePin) => {
+    io.to(gamePin).emit("show-answers");
+  });
+
+  socket.on("show-ranking", (gamePin) => {
+    io.to(gamePin).emit("show-ranking");
+  });
+
+  socket.on("show-end-round", (gamePin) => {
+    io.to(gamePin).emit("show-end-round");
+  });
 });
 
 app.post("/check-pin", (req, res) => {
@@ -178,12 +190,15 @@ app.post("/start-game", (req, res) => {
 });
 
 app.post("/submit-answer", (req, res) => {
-  const { pin, rightAnswer } = req.body;
+  const { pin, rightAnswer, roundPlayer } = req.body;
 
   let game = games.find((g) => g.pin === pin);
 
   if (game) {
     game.rightAnswer = rightAnswer;
+    const player = game.players.find((p) => p.id === roundPlayer.id);
+    player.has_answered = true;
+    player.answer = rightAnswer;
 
     io.to(pin).emit("right-answer-submitted", rightAnswer);
 
@@ -205,15 +220,25 @@ app.post("/submit-guess", (req, res) => {
       return res.status(404).json({ message: "Joueur non trouvé" });
     }
 
-    // Vérifier si la réponse devinée est correcte
     const isCorrect = guessedAnswer === game.rightAnswer;
     if (isCorrect) {
-      player.points += 1; // Ajouter des points si la réponse est correcte
+      player.points += 1;
+    }
+
+    player.has_answered = true;
+    player.answer = guessedAnswer;
+
+    let allAnswered = game.players.every((p) => p.has_answered);
+
+    if (allAnswered) {
+      io.to(pin).emit("all-answered", true, game.players);
     }
 
     return res.json({
       message: isCorrect ? "Bonne réponse, points ajoutés" : "Mauvaise réponse",
       isCorrect,
+      hasAnswered: true,
+      answer: guessedAnswer,
     });
   } else {
     return res.status(404).json({ message: "Partie non trouvée" });
