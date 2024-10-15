@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const { questions, rounds } = require("./constantes");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -19,53 +20,6 @@ app.use(cors());
 app.use(express.json());
 
 let games = [];
-let rounds = [
-  {
-    id: 1,
-    name: "Personnalité",
-  },
-  {
-    id: 2,
-    name: "Situations",
-  },
-  {
-    id: 3,
-    name: "Relations",
-  },
-  {
-    id: 4,
-    name: "Représentations",
-  },
-];
-let questions = [
-  {
-    id: 1,
-    round_id: 1,
-    name: "vos vrais amis, vous les comptez ...",
-    answer_1: "Sur les doigts d'une main",
-    answer_2: "Sur les deux mains",
-    answer_3: "Vous n'avez pas assez de doigts pour les compter",
-    answer_4: "Vous n'en avez pas",
-  },
-  {
-    id: 2,
-    round_id: 1,
-    name: "à quelle fréquence vous observez-vous à travers un miroir ou des photos ?",
-    answer_1: "Plus souvent que la plupart des gens",
-    answer_2: "Moins souvent que la plupart des gens",
-    answer_3: null,
-    answer_4: null,
-  },
-  {
-    id: 3,
-    round_id: 1,
-    name: "mentez-vous ?",
-    answer_1: "Plus que la plupart des gens",
-    answer_2: "Moins que la plupart des gens",
-    answer_3: null,
-    answer_4: null,
-  },
-];
 
 function getRandomQuestion(game) {
   const roundQuestions = questions.filter(
@@ -74,11 +28,6 @@ function getRandomQuestion(game) {
   );
   return roundQuestions[Math.floor(Math.random() * roundQuestions.length)];
 }
-
-// function getNextPlayer(game) {
-//   game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
-//   return game.players[game.currentPlayerIndex];
-// }
 
 io.on("connection", (socket) => {
   console.log("Un joueur s'est connecté : ", socket.id);
@@ -219,7 +168,7 @@ app.post("/submit-answer", (req, res) => {
   if (game) {
     game.rightAnswer = rightAnswer;
     const player = game.players.find((p) => p.id === roundPlayer.id);
-    player.has_answered = true;
+    player.hasAnswered = true;
     player.answer = rightAnswer;
 
     io.to(pin).emit("right-answer-submitted", rightAnswer);
@@ -250,10 +199,10 @@ app.post("/submit-guess", (req, res) => {
       player.points += 1;
     }
 
-    player.has_answered = true;
+    player.hasAnswered = true;
     player.answer = guessedAnswer;
 
-    let allAnswered = game.players.every((p) => p.has_answered);
+    let allAnswered = game.players.every((p) => p.hasAnswered);
 
     if (allAnswered) {
       io.to(pin).emit("all-answered", true, game.players);
@@ -279,9 +228,23 @@ app.post("/next-turn", (req, res) => {
     const allPlayersPlayed = game.players.every((player) => player.isTurn);
 
     if (allPlayersPlayed) {
+      game.currentRound = rounds.find((r) => r.id === 2);
+      game.rightAnswer = null;
+      game.posedQuestions = [];
+      game.players = game.players.map((p) => ({
+        ...p,
+        isTurn: false,
+        hasAnswered: false,
+        answer: false,
+      }));
+      let currentQuestion = getRandomQuestion(game);
+      let roundPlayer = game.players.find((player) => player.id === 1);
+
       io.to(pin).emit("round-ended", {
         message: "Tous les joueurs ont joué, la manche est terminée.",
-        gamePlayers: game.players,
+        game: game,
+        roundPlayer: roundPlayer,
+        currentQuestion: currentQuestion,
       });
 
       return res.json({
@@ -293,7 +256,7 @@ app.post("/next-turn", (req, res) => {
 
       game.players = game.players.map((player) => ({
         ...player,
-        has_answered: false,
+        hasAnswered: false,
         answer: "",
       }));
 
