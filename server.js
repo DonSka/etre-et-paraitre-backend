@@ -228,7 +228,7 @@ app.post("/next-turn", (req, res) => {
     const allPlayersPlayed = game.players.every((player) => player.isTurn);
 
     if (allPlayersPlayed) {
-      game.currentRound = rounds.find((r) => r.id === 2);
+      game.currentRound = rounds.find((r) => r.id === game.currentRound.id + 1);
       game.rightAnswer = null;
       game.posedQuestions = [];
       game.players = game.players.map((p) => ({
